@@ -1,0 +1,444 @@
+﻿<!DOCTYPE html>
+<html>
+
+<head>
+    <!-- Description: This sample demonstrates how to get the full list of available data from DC Open Data and add to map.->
+    <!-- Last Updated Date: 01/15/2017 -->
+    <!-- Attribution:
+    Styling inspired by Esri Story Map: http://storymaps.esri.com/stories/2016/top-stories/
+    -->
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=7,IE=9">
+    <meta name="viewport" content="initial-scale=1, maximum-scale=1,user-scalable=no">
+    <title>Exploring DC Open Data </title>
+    <script src="https://js.arcgis.com/3.10/"></script>
+    <link rel="stylesheet" href="//js.arcgis.com/3.10/js/esri/css/esri.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
+    <script src="http://esri.github.io/geojson-layer-js/vendor/terraformer/terraformer.min.js"></script>
+    <script src="http://esri.github.io/geojson-layer-js/vendor/terraformer-arcgis-parser/terraformer-arcgis-parser.min.js"></script>
+    <link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.1.1/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="//esri.github.io/bootstrap-map-js/src/css/bootstrapmap.css">
+    <link rel="stylesheet" href="http://ajax.googleapis.com/ajax/libs/jqueryui/1.8/themes/base/jquery-ui.css">
+    <script src="http://ajax.googleapis.com/ajax/libs/jqueryui/1.8/jquery-ui.min.js"></script>
+    <link rel="shortcut icon" type="image/x-icon" href="https://dc.gov/sites/default/files/favicon_0.ico">    
+    <style>
+    html,
+    body,
+    #mapDiv {
+        height: 100%;
+        width: 100%;
+        font-family: "open_sanssemi", sans-serif;            
+    }
+    
+    @media (max-width: 600px) {
+        .panel-fixed {
+            width: 300px;
+        }
+    }
+    
+    .panel-primary .panel-heading {
+        background-color: #080808;
+        border-color: #080808;
+    }
+
+    .panel-primary {
+        border-color: #080808;
+
+    }
+
+    #chevron {
+         background-color: #646467;
+    }
+
+    
+    .panel-fixed {
+        width: 400px;
+        opacity: 0.8;
+        top: 100px;
+        background-color: #313131;        
+    }
+    
+    .form-control {
+        background-color: #353434;
+        color:#fff;
+    }
+
+    .form-control:focus {
+        border-color: #fff;
+    }
+
+    .btn-success {
+        background-color: #101010;
+        border-color: #ccc;
+        color: #fff;
+    }
+
+    .btn-success:hover{
+        background-color: #AAABAA;
+        border-color:#AAABAA;
+    }
+    
+    .btn-download {
+        float: left;
+        width: 160px;
+        margin-right: 10px;
+        margin-bottom: 5px;
+        background-color: #101010;
+        /*border-color:  #adadad; */
+        color: #fff;      
+    }
+    
+
+    .ui-menu .ui-menu-item {
+        background-color: #353434;
+    }
+
+    .ui-widget-content a {
+        color: #fff;
+    }
+
+    #searchBox {
+        z-index: 300;
+    }
+
+    a {
+        color: #fff;
+        font-family: 'open_sansregular', sans-serif;
+    }    
+    </style>
+    <style>
+    /*styling for title bar and about pop over */
+    
+    #title {
+        color: #FFF;
+        font-family: "open_sanssemibold", sans-serif;
+        padding: 3 0 0 4;
+        font-size: 24px;
+        line-height: 30px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;           
+    }
+    
+    a:link {
+        color: white;
+        background-color: transparent;
+        text-decoration: underline;
+    }
+        
+    .header {
+        position: relative;
+        padding: 15px 30px 25px 30px;
+        margin: auto;
+        z-index: 500;
+        background-color: rgb(12, 12, 12);
+        box-shadow: 0 3px 5px 0 rgba(0, 0, 0, .75);
+        opacity: 0.8;
+    }
+    
+    #about {
+        padding: 10px 20px 20px 20px;
+        z-index: 4000;
+        position: absolute;
+        background-color: #505050;
+        color: white;
+        width: 700px;
+        left: 50%;
+        margin-left: -300px;
+        height: calc(100% - 200px);
+        top: 100px;
+        display: none;
+        overflow: hidden;
+        opacity: 0.95;
+    }
+    
+    #dismiss-about {
+        cursor: pointer;
+        font-size: 30px;
+        float: right;
+        margin-bottom: 10px;
+    }
+    
+    #inner {
+        width: 100%;
+        height: calc(100% - 60px);
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        font-size: 1.2em;        
+    }
+    </style>
+</head>
+
+<body>
+    <div class="panel panel-primary panel-fixed">
+        <div class="panel-heading">
+            <h3 class="panel-title"> Search DC Open Data</h3>
+            <button id="chevron" class="btn btn-primary btn-xs btn-absolute">
+                <span class="glyphicon glyphicon-chevron-up"></span>
+            </button>
+        </div>
+        <div class="panel-body collapse in">
+            <div class="form text-left">
+                <div class="form-group">
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="searchBox" value=" " placeholder="search open data  ">
+                        <span class="input-group-btn">
+                            <button id="btnAdd" class="btn btn-success" type="button">Load</button>
+                        </span>
+                    </div>
+                </div>
+                <div class="form-group text-center">
+                    <button id="btnGeojson" class="btn btn-default btn-download">Download as Geojson </button>
+                    <button id="btnCsv" class="btn btn-default btn-download ">Download as CSV </button>
+                    <button id="btnRemove" class="btn btn-default btn-download">Clear </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="mapDiv">
+        <div class='header'>
+            <div id="title">Exploring DC Open Data</div>
+            <div id="sourceUrls" style="float: right;">
+                <a id="dcOpenDataUrl" style="color:rgb(206,206,206);font-size:14px;margin-right: 10px;" href="https://github.in.dc.gov/OCTO/DCOpenDataSamples" target="_blank">This on Github</a>
+                <a id="aboutTheMap" style="color:rgb(206,206,206);font-size:14px; " href="javascript:void(0)" >About This Map</a>
+            </div>
+        </div>
+    </div>
+    <div id="about">
+        <a id="dismiss-about">×</a>
+        <div id="inner">
+            <p style="font-size: 1.4em; text-transform: uppercase; text-align: center">About this Map
+            </p>
+            <p style="font-size: 1.2em;">This sample demonstrates how to get the full list of available data from DC Open Data and add to map.</p>
+            <p><span><strong>Instructions</strong></span>
+                <br/> Input key word in the search box, wait for the dropdown list coming up, select one data from the dropdow list, and hit load button</p>
+            <p><span><strong>Built with...</strong></span>
+                <br/> dojo, ArcGIS JS API, jQuery, bootstrap</p>
+            <p><span><strong>DC Open Data</strong></span>
+                <br/><a href="http://opendata.dc.gov" target="_blank">http://opendata.dc.gov</a></p>
+            <p><span><strong>DC Open Data Samples</strong></span>
+                <br/><a href="https://github.in.dc.gov/OCTO/DCOpenDataSamples" target="_blank">https://github.in.dc.gov/OCTO/DCOpenDataSamples</a></p>
+            <br/>
+            <div id="logos" style="text-align: center;">
+                <img typeof="foaf:Image" src="http://wearewashingtondc.com/wp-content/uploads/2014/11/WeAreWashintgonDCFinalLogo-Website.png" title="DC Geographic Information System (DC GIS)">
+            </div>
+        </div>
+    </div>
+    <script>
+    require([
+        "esri/map",
+        "http://esri.github.io/geojson-layer-js/src/geojsonlayer.js",
+        "esri/renderers/SimpleRenderer",
+        "dojo/on",
+        "dojo/query",
+        "dojo/dom",
+        "dojo/dom-style",
+        "esri/renderers/ClassBreaksRenderer",
+        "dojo/domReady!"
+    ], function(
+        Map,
+        GeoJsonLayer,
+        SimpleRenderer,
+        on,
+        query,
+        dom,
+        domStyle
+    ) {
+        var map;
+        var dcWardUrl = "http://opendata.dc.gov/datasets/0ef47379cbae44e88267c01eaec2ff6e_31.geojson";
+
+        //DC Open Data page query url example: "http://opendata.dc.gov/datasets?q=*&page=3&sort_by=updated_at"
+        var pageQueryUrl = "http://opendata.dc.gov/datasets?q=*&page=";
+        var pageQueryParams = "&sort_by=updated_at";
+        var pageCount = 0;
+        var pageArray = [];
+        var datasetArray = [];
+        var tmpCount = 0;
+        var selectedObj = {};
+
+        //init app
+        function init() {
+            initMap();
+            initSearchPanel();
+            initSearchDropdown();
+
+            on(dom.byId("aboutTheMap"), "click", function() {
+                domStyle.set("about", "display", "block");
+                return false;
+            });
+
+            on(dom.byId("dismiss-about"), "click", function() {
+                domStyle.set("about", "display", "none");
+                return false;
+            });
+        }
+
+        //init map control
+        function initMap() {
+            map = new Map("mapDiv", {
+                id: "dcbasemap",
+                basemap: "gray",
+                center: [-77.0252, 38.8929],
+                zoom: 12
+            });
+            map.infoWindow.domNode.className += " light";
+            map.on("load", function() {
+                //add DC Ward boundary as background
+                var dcWardGeoJsonLayer = new GeoJsonLayer({
+                    url: dcWardUrl
+                });
+                // Zoom to layer
+                dcWardGeoJsonLayer.on("update-end", function(e) {
+                    map.setExtent(e.target.extent.expand(1.2));
+                });
+                // Add to map
+                map.addLayer(dcWardGeoJsonLayer);
+            });
+        }
+
+        // add geoJson layer by url
+        function addGeoJsonLayer(url) {
+            var geoJsonLayer = new GeoJsonLayer({
+                url: url
+            });
+            // Zoom to layer
+            geoJsonLayer.on("update-end", function(e) {
+                map.setExtent(e.target.extent.expand(1.2));
+            });
+            // Add to map
+            map.addLayer(geoJsonLayer);
+        }
+
+        // init the Search DC Open Data panel
+        function initSearchPanel() {
+            // Wire UI events
+            on(dom.byId("btnAdd"), "click", loadSelectedData);
+            on(dom.byId("btnRemove"), "click", removeAllLayers);
+            on(dom.byId("btnGeojson"), "click", downloadAsGeojson);
+            on(dom.byId("btnCsv"), "click", downloadAsCsv);
+
+            // Toggle panel
+            on(query(".panel-heading")[0], "click", function() {
+                if (query(".glyphicon.glyphicon-chevron-up")[0]) {
+                    query(".glyphicon").replaceClass("glyphicon-chevron-down", "glyphicon-chevron-up");
+                    query(".panel-body.collapse").removeClass("in");
+                } else {
+                    query(".glyphicon").replaceClass("glyphicon-chevron-up", "glyphicon-chevron-down");
+                    query(".panel-body.collapse").addClass("in");
+                }
+            });
+        }
+
+        // load the selected data: add to map as GeoJsonLayer
+        function loadSelectedData() {
+            if (selectedObj == null) {
+                return;
+            }
+            // Create the layer
+            var geoJsonLayer = new GeoJsonLayer({
+                url: selectedObj.geojsonurl
+            });
+
+            // Zoom to layer
+            geoJsonLayer.on("update-end", function(e) {
+                map.setExtent(e.target.extent.expand(1.2));
+            });
+            // Add to map
+            map.addLayer(geoJsonLayer);
+        }
+
+        //Reset the app
+        function removeAllLayers() {
+            var i, lyr, ids = map.graphicsLayerIds;
+            for (i = ids.length - 1; i > -1; i--) {
+                lyr = map.getLayer(ids[i]);
+                map.removeLayer(lyr);
+            }
+            map.infoWindow.hide();
+            $('#searchBox').val('');
+            addGeoJsonLayer(dcWardUrl);
+            selectedObj = {};
+        }
+
+        // init the Search Open Data dropdown
+        function initSearchDropdown() {
+
+            var url1 = "http://opendata.dc.gov/datasets";
+            $('#searchBox').val('');
+
+            $.get(url1, function(data1) {
+                var total_count = data1.metadata.stats.total_count;
+                pageCount = Math.ceil(total_count / data1.metadata.stats.count);
+                getDatasetInfos(pageCount)
+            });
+
+            $("#searchBox").autocomplete({
+                source: function(request, response) {
+                    var matcher = new RegExp($.ui.autocomplete.escapeRegex(request.term), "i");
+                    var matching = $.grep(datasetArray, function(obj) {
+                        var name = obj.value;
+                        var id = obj.id;
+                        var geojsonurl = obj.geojsonurl;
+
+                        return matcher.test(name) || matcher.test(geojsonurl) || matcher.test(id);
+                    });
+                    response(matching);
+                },
+                select: function(event, ui) {
+                    selectedObj.name = ui.item.value;
+                    selectedObj.geojsonurl = ui.item.geojsonurl;
+                    selectedObj.csvurl = ui.item.csvurl;
+                }
+            });
+        }
+
+        //Get all dataset's info such as GeoJson Url and csv url
+        function getDatasetInfos(pageCount) {
+            for (var i = 1; i <= pageCount; i++) {
+                pageArray.push(pageQueryUrl + i + pageQueryParams);
+            }
+            for (var i = 0; i < pageArray.length; i++) {
+                doAjax(i);
+            }
+
+            function doAjax(i) {
+                var url5 = "http://opendata.dc.gov/datasets";
+
+                $.get(pageArray[i], function(data3) {
+                    for (var j = 0; j < data3.metadata.stats.count; j++) {
+                        var datasetObj = {};
+                        tmpCount++;
+                        datasetObj.value = data3.data[j].item_name;
+                        datasetObj.id = data3.data[j].id;
+                        datasetObj.geojsonurl = "http://opendata.dc.gov/datasets/" + data3.data[j].id + ".geojson";
+                        datasetObj.csvurl = "http://opendata.dc.gov/datasets/" + data3.data[j].id + ".csv";
+                        datasetArray.push(datasetObj);
+                    }
+                });
+            }
+        }
+
+        //download selected dataset as GeoJson
+        function downloadAsGeojson() {
+            if (jQuery.isEmptyObject(selectedObj)) {
+                return;
+            } else {
+                window.open(selectedObj.geojsonurl, '_blank');
+            }
+        }
+        //download selected dataset as CSV
+        function downloadAsCsv() {
+            if (jQuery.isEmptyObject(selectedObj)) {
+                return;
+            } else {
+                window.open(selectedObj.csvurl, '_blank');
+            }
+        }
+
+        init();
+
+    });
+    </script>
+</body>
+
+</html>

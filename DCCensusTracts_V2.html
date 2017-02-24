@@ -1,0 +1,313 @@
+﻿<!DOCTYPE html>
+<html>
+
+<head>
+    <!-- Description: This sample demonstrates how to display data from DC Open Data to an info window with a chart using ArcGIS JS API -->
+    <!-- Last Updated Date: 12/29/2016 -->
+    <!-- Attribution:
+    Esri ArcGIS JS API Samples, Url: https://developers.arcgis.com/javascript/3/jssamples/widget_infowindowchart.html 
+    Styling inspired by Esri Story Map: http://storymaps.esri.com/stories/2016/top-stories/
+    -->
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="initial-scale=1, maximum-scale=1,user-scalable=no">
+    <title>Census Tracts - 2010 @ Washington, DC</title>
+    <link rel="stylesheet" href="https://js.arcgis.com/3.19/dijit/themes/claro/claro.css">
+    <link rel="stylesheet" href="https://js.arcgis.com/3.19/esri/css/esri.css">
+    <link rel="shortcut icon" type="image/x-icon" href="https://dc.gov/sites/default/files/favicon_0.ico">    
+    <style>
+    body {
+        margin: 0;
+        padding: 0;
+        font-family: "open_sanssemi", sans-serif;        
+    }
+    
+    #map {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 100%;
+    }
+
+    a {
+        color: #fff;
+        font-family: 'open_sansregular', sans-serif;
+    }    
+    
+    .esriSimpleSliderTL {
+        top: 100px;
+    }
+        
+    .chart {
+        width: 200px;
+        height: 200px;
+        padding: 0px !important;
+    }
+</style>    
+ <style>
+    /*styling for title bar and about pop over */
+    #title {
+        color: #FFF;
+        font-family: "open_sanssemibold", sans-serif;
+        padding: 3 0 0 4;
+        font-size: 24px;
+        line-height: 30px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;          
+    }
+    
+    .header {
+        position: relative;
+        padding: 15px 30px 25px 30px;
+        margin: auto;
+        z-index: 500;
+        background-color: rgb(12, 12, 12);
+        box-shadow: 0 3px 5px 0 rgba(0, 0, 0, .75);
+        opacity: 0.8;
+    }
+    
+    #about {
+        padding: 10px 20px 20px 20px;
+        z-index: 4000;
+        position: absolute;
+        background-color: #505050;
+        color: white;
+        width: 700px;
+        left: 50%;
+        margin-left: -300px;
+        height: calc(100% - 200px);
+        top: 100px;
+        display: none;
+        overflow: hidden;
+        opacity: 0.95;
+    }
+    
+    #dismiss-about {
+        cursor: pointer;
+        font-size: 30px;
+        float: right;
+        margin-bottom: 10px;
+    }
+    
+    #inner {
+        width: 100%;
+        height: calc(100% - 60px);
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    </style>
+    <script src="https://js.arcgis.com/3.19/"></script>
+    <!-- Load the main Terraformer Core library for transforming GeoJSON -->
+    <script src="http://esri.github.io/geojson-layer-js/vendor/terraformer/terraformer.min.js"></script>
+    <!-- Load Terraformer ArcGIS Parser plugin library, which handles two way conversion between GeoJson and the ArcGIS Geometry format used by esri -->
+    <script src="http://esri.github.io/geojson-layer-js/vendor/terraformer-arcgis-parser/terraformer-arcgis-parser.min.js"></script>
+    <script>
+    var map;
+    var theme = "Wetland";
+    //census tracts data from DC Open Data
+    var censusGeoJsonUrl = "http://opendata.dc.gov/datasets/6969dd63c5cb4d6aa32f15effb8311f3_8.geojson";
+
+    require([
+        "esri/map", "esri/layers/FeatureLayer",
+        "esri/dijit/InfoWindow", "esri/InfoTemplate",
+        "esri/symbols/SimpleFillSymbol", "esri/renderers/SimpleRenderer",
+        "dojo/dom-attr", "dijit/layout/ContentPane", "dijit/layout/TabContainer",
+        "dojox/charting/Chart2D", "dojox/charting/plot2d/Pie",
+        "dojox/charting/action2d/Highlight", "dojox/charting/action2d/MoveSlice", "dojox/charting/action2d/Tooltip",
+        "dojox/charting/themes/" + theme,
+        "http://esri.github.io/geojson-layer-js/src/geojsonlayer.js",
+        "esri/symbols/SimpleLineSymbol",
+        "esri/Color",
+        "dojo/dom-construct", "dojo/dom-class",
+        "dojo/number", "dojo/dom-style", "dojo/on", "dojo/dom", "dojo/domReady!"
+    ], function(
+        Map, FeatureLayer,
+        InfoWindow, InfoTemplate,
+        SimpleFillSymbol, SimpleRenderer,
+        domAttr, ContentPane, TabContainer,
+        Chart2D, Pie,
+        Highlight, MoveSlice, Tooltip,
+        dojoxTheme, GeoJsonLayer, SimpleLineSymbol, Color,
+        domConstruct, domClass,
+        number, domStyle, on, dom, parser
+    ) {
+
+        // Use the info window instead of the popup.
+        var infoWindow = new InfoWindow(null, domConstruct.create("div"));
+        infoWindow.startup();
+
+        map = new Map("map", {
+            basemap: "gray",
+            center: [-122.5, 45.5],
+            infoWindow: infoWindow,
+            zoom: 5
+        });
+        map.infoWindow.resize(275, 275);
+
+        map.on("load", function() {
+            addGeoJsonLayer(censusGeoJsonUrl);
+        });
+
+        var template = new esri.InfoTemplate();
+        // Flag icons are from http://twitter.com/thefella, released under creative commons.
+        template.setTitle("<b>Census Tracts -  ${TRACT}</b>");
+        template.setContent(getWindowContent);
+
+        on(dom.byId("aboutTheMap"), "click", function() {
+            domStyle.set("about", "display", "block");
+            return false;
+        });
+
+        on(dom.byId("dismiss-about"), "click", function() {
+            domStyle.set("about", "display", "none");
+            return false;
+        });
+
+        function getWindowContent(graphic) {
+            // Make a tab container.
+            var tc = new TabContainer({
+                style: "width:100%;height:100%;"
+            }, domConstruct.create("div"));
+
+            // Display attribute information.
+            var cp1 = new ContentPane({
+                title: "Race Info",
+                content: "Total Population: " + graphic.attributes.P0010001 +
+                    "<br>White: " + graphic.attributes.P0010003 +
+                    "<br>Black: " + graphic.attributes.P0010004 +
+                    "<br>American Indian: " + graphic.attributes.P0010005 +
+                    "<br>Asian : " + graphic.attributes.P0010006 +
+                    "<br>Hawaiian: " + graphic.attributes.P0010007 +
+                    "<br>Other: " + graphic.attributes.P0010008
+            });
+            // Display a dojo pie chart for the race percentage information.
+            var cp2 = new ContentPane({
+                title: "Pie Chart"
+            });
+            tc.addChild(cp1);
+            tc.addChild(cp2);
+
+            // Create the chart that will display in the second tab
+            var c = domConstruct.create("div", {
+                id: "demoChart"
+            }, domConstruct.create("div"));
+            var chart = new Chart2D(c);
+            domClass.add(chart, "chart");
+
+            // Apply a color theme to the chart
+            chart.setTheme(dojoxTheme);
+            chart.addPlot("default", {
+                type: "Pie",
+                radius: 80,
+                htmlLabels: true
+            });
+            tc.watch("selectedChildWidget", function(name, oldVal, newVal) {
+                if (newVal.title === "Pie Chart") {
+                    chart.resize(180, 180);
+                }
+            });
+
+            // Calculate percent of each race category
+            var total = graphic.attributes.P0010001;
+
+            var White = number.round(graphic.attributes.P0010003 / total * 100, 2);
+            var Black = number.round(graphic.attributes.P0010004 / total * 100, 2);
+            var American_Indian = number.round(graphic.attributes.P0010005 / total * 100, 2);
+            var Asian = number.round(graphic.attributes.P0010006 / total * 100, 2);
+            var Hawaiian = number.round(graphic.attributes.P0010007 / total * 100, 2);
+            var Other = number.round(graphic.attributes.P0010008 / total * 100, 2);
+
+            chart.addSeries("PopulationSplit", [{
+                y: White,
+                tooltip: "White " + White + "%",
+                text: "White"
+            }, {
+                y: Black,
+                tooltip: "Black " + Black + "%",
+                text: "Black"
+            }, {
+                y: American_Indian,
+                tooltip: "American_Indian " + American_Indian + "%",
+                text: "American_Indian"
+            }, {
+                y: Asian,
+                tooltip: "Asian " + Asian + "%",
+                text: "Asian"
+            }, {
+                y: Hawaiian,
+                tooltip: "Hawaiian " + Hawaiian + "%",
+                text: "Hawaiian"
+            }, {
+                y: Other,
+                tooltip: "Other " + Other + "%",
+                text: "Other"
+            }]);
+
+            //highlight the chart and display tooltips when you mouse over a slice.
+            new Highlight(chart, "default");
+            new Tooltip(chart, "default");
+            new MoveSlice(chart, "default");
+
+            cp2.set("content", chart.node);
+            return tc.domNode;
+        }
+
+        function addGeoJsonLayer(url) {
+            // Create the layer
+            var geoJsonLayer = new GeoJsonLayer({
+                url: url,
+                maxdraw: 10000
+            });
+
+            geoJsonLayer.setInfoTemplate(template);
+
+            geoJsonLayer._simplePolygonSym = new SimpleFillSymbol("solid", new SimpleLineSymbol("solid", new Color([0, 102, 153, 0.9]), 1), new Color([150, 255, 150, 0.2]));
+
+            // Zoom to layer
+            geoJsonLayer.on("update-end", function(e) {
+                map.setExtent(e.target.extent.expand(1.2));
+            });
+            // Add to map
+            map.addLayer(geoJsonLayer);
+
+        }
+    });
+    </script>
+</head>
+
+<body class="claro">
+    <div id="map"></div>
+    <div class='header'>
+        <div id="title">Census Tracts - 2010 @ Washington, DC</div>
+        <div id="sourceUrls" style="float:right">
+            <a id="dcOpenDataUrl" style="color:rgb(206,206,206); font-size:14px; " href="https://github.in.dc.gov/OCTO/DCOpenDataSamples" target="_blank">This on Github</a>
+            <a id="aboutTheMap" style="color:rgb(206,206,206);font-size:14px; " href="javascript:void(0)">About This Map</a>
+        </div>
+    </div>
+    <div id="about">
+        <a id="dismiss-about">×</a>
+        <div id="inner">
+            <p style="font-size: 1.4em; text-transform: uppercase; text-align: center">About this map
+            </p>
+            <p style="font-size: 1.2em;">This sample demonstrates how to display data from DC Open Data to an info window with a chart using ArcGIS JS API.</p>
+            <p><span><Strong>Instructions</Strong></span>
+                <br/> Click census tracts to check race info in text and pie chart.</p>
+            <p><span><Strong>Built With...</Strong></span>
+                <br/> dojo, ArcGIS JS API</p>
+            <p><span><Strong>Download Census Tracts - 2010 Data in GeoJSON</Strong></span>
+                <br/><a href="http://opendata.dc.gov/datasets/5555b90602a94d9c85d63ee62a860c6e_31.geojson" target="_blank"></a>http://opendata.dc.gov/datasets/5555b90602a94d9c85d63ee62a860c6e_31.geojson</p>
+            <p><span><Strong>View Census Tracts - 2010 Data on DC Open Data</Strong></span>
+                <br/><a href="http://opendata.dc.gov/datasets/5555b90602a94d9c85d63ee62a860c6e_31" target="_blank">http://opendata.dc.gov/datasets/5555b90602a94d9c85d63ee62a860c6e_31</a></p>
+            <p><span><Strong>DC Open Data</Strong></span>
+                <br/><a href="http://opendata.dc.gov" target="_blank">http://opendata.dc.gov</a></p>
+            <p><span><Strong>DC Open Data Samples</Strong></span>
+                <br/><a href="https://github.in.dc.gov/OCTO/DCOpenDataSamples">https://github.in.dc.gov/OCTO/DCOpenDataSamples</a></p>
+            <br/>
+            <div id="logos" style="text-align:center">
+                <img typeof="foaf:Image" src="http://wearewashingtondc.com/wp-content/uploads/2014/11/WeAreWashintgonDCFinalLogo-Website.png" title="DC Geographic Information System (DC GIS)">
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>
